@@ -4,10 +4,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from app.models import Participant, ParticipantSkill, Team
 from app.models.session import Session, SessionStatus
-from app.models.team import Team
-from app.models.participant import Participant
-from app.models.participant_skill import ParticipantSkill
 from app.repositories.base import BaseRepository
 
 
@@ -15,11 +13,12 @@ class SessionRepository(BaseRepository[Session]):
     model = Session
 
     async def get_with_relations(self, id: UUID) -> Session | None:
-        """Завантажує сесію з командами, учасниками та навичками."""
+        """Завантажує сесію разом з учасниками і командами."""
         result = await self.db.execute(
             select(Session)
             .where(Session.id == id)
             .options(
+                selectinload(Session.owner),
                 selectinload(Session.participants).selectinload(
                     Participant.skills
                 ).selectinload(ParticipantSkill.skill),
@@ -33,6 +32,7 @@ class SessionRepository(BaseRepository[Session]):
         return result.scalar_one_or_none()
 
     async def get_by_token(self, token: str) -> Session | None:
+        """Знаходить сесію за токеном організатора."""
         result = await self.db.execute(
             select(Session).where(Session.organizer_token == token)
         )
@@ -44,6 +44,7 @@ class SessionRepository(BaseRepository[Session]):
         team_count: int,
         min_team_size: int,
         max_team_size: int,
+        owner_id=None,
     ) -> Session:
         session = Session(
             name=name,
@@ -51,6 +52,7 @@ class SessionRepository(BaseRepository[Session]):
             min_team_size=min_team_size,
             max_team_size=max_team_size,
             organizer_token=secrets.token_urlsafe(32),
+            owner_id=owner_id,
         )
         self.db.add(session)
         await self.db.flush()

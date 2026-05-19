@@ -4,11 +4,13 @@ import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Users, Plus } from 'lucide-react'
 import Layout from '../components/ui/Layout'
+import { useAuth } from '../contexts/AuthContext'
 import { sessionsApi } from '../api/sessions'
 import { getErrorMessage } from '../api/client'
 
 export default function HomePage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [name, setName] = useState('')
   const [teamCount, setTeamCount] = useState(3)
   const [minSize, setMinSize] = useState(1)
@@ -17,7 +19,6 @@ export default function HomePage() {
   const createMutation = useMutation({
     mutationFn: sessionsApi.create,
     onSuccess: (session) => {
-      // Зберігаємо токен в localStorage для поточного сеансу
       if (session.organizer_token) {
         localStorage.setItem('organizer_token', session.organizer_token)
         localStorage.setItem(`token_${session.id}`, session.organizer_token)

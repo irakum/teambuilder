@@ -17,6 +17,7 @@ class SessionService:
         team_count: int,
         min_team_size: int = 1,
         max_team_size: int = 50,
+        owner_id=None,
     ) -> Session:
         if team_count < 2 or team_count > 20:
             from app.core.exceptions import BusinessRuleError
@@ -30,6 +31,7 @@ class SessionService:
             team_count=team_count,
             min_team_size=min_team_size,
             max_team_size=max_team_size,
+            owner_id=owner_id,
         )
 
     async def get(self, session_id: UUID) -> Session:

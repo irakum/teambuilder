@@ -5,16 +5,23 @@ export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Додає токен організатора до запитів якщо є в localStorage
+// Додає токени до запитів
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('organizer_token')
-  if (token) {
-    config.headers['X-Organizer-Token'] = token
+  // Organizer token для управління сесією
+  const organizerToken = localStorage.getItem('organizer_token')
+  if (organizerToken) {
+    config.headers['X-Organizer-Token'] = organizerToken
   }
+
+  // JWT для авторизованих запитів
+  const jwtToken = localStorage.getItem('jwt_token')
+  if (jwtToken) {
+    config.headers['Authorization'] = `Bearer ${jwtToken}`
+  }
+
   return config
 })
 
-// Витягує зрозуміле повідомлення про помилку з відповіді FastAPI
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail

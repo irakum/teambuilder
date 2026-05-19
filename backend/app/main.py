@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.api.exception_handlers import register_exception_handlers
-from app.api.routers import sessions, participants, distribution
+from app.api.routers import sessions, participants, distribution, auth, dashboard
 
 app = FastAPI(
     title="TeamBuilder API",
@@ -28,6 +28,8 @@ register_exception_handlers(app)
 app.include_router(sessions.router, prefix="/api")
 app.include_router(participants.router, prefix="/api")
 app.include_router(distribution.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
 
 
 @app.get("/api/health", tags=["health"])

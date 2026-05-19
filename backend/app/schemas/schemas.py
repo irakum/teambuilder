@@ -75,11 +75,31 @@ class ParticipantOut(BaseModel):
 
     @classmethod
     def from_orm_with_skills(cls, participant) -> "ParticipantOut":
-        tags = (
-            participant.tags_list
-            if hasattr(participant, "tags_list")
-            else participant.compatibility_tags or []
-        )
+        import json as _json
+        raw = participant.compatibility_tags
+        if isinstance(raw, list):
+            # Може бути список з одного JSON-рядка або список рядків
+            if len(raw) == 1 and isinstance(raw[0], str) and raw[0].startswith('['):
+                try:
+                    tags = _json.loads(raw[0])
+                except Exception:
+                    tags = raw
+            elif all(isinstance(t, str) and not t.startswith('[') for t in raw):
+                tags = raw
+            else:
+                try:
+                    tags = _json.loads(''.join(str(x) for x in raw))
+                except Exception:
+                    tags = []
+        elif isinstance(raw, str):
+            try:
+                tags = _json.loads(raw)
+                if not isinstance(tags, list):
+                    tags = []
+            except Exception:
+                tags = []
+        else:
+            tags = []
         return cls(
             id=participant.id,
             name=participant.name,

@@ -1,6 +1,8 @@
 import uuid
 
 from sqlalchemy import String, Float, ForeignKey
+from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.types import Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -11,39 +13,38 @@ class Participant(Base):
     __tablename__ = "participants"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     session_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("sessions.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
+    # team_id заповнюється після виконання розподілу, до того — NULL
     team_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("teams.id", ondelete="SET NULL"),
         nullable=True,
     )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Зважений сумарний рейтинг навичок — обчислюється перед розподілом
     total_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
-    # Теги сумісності — зберігаємо як JSON (працює і в SQLite і в PostgreSQL)
-    compatibility_tags: Mapped[str] = mapped_column(
-        String(1000), nullable=False, default="[]"
+    # Теги сумісності — список рядків, наприклад ["leader", "backend"]
+    # Зберігаємо як масив PostgreSQL, щоб не створювати окрему таблицю для тегів
+    compatibility_tags: Mapped[list[str]] = mapped_column(
+        ARRAY(String), nullable=False, default=list
     )
 
-    @property
-    def tags_list(self) -> list[str]:
-        import json as _j
-        if not self.compatibility_tags:
-            return []
-        if isinstance(self.compatibility_tags, list):
-            return self.compatibility_tags
-        try:
-            return _j.loads(self.compatibility_tags)
-        except Exception:
-            return []
-
+    user: Mapped["User | None"] = relationship(foreign_keys="[Participant.user_id]")
     session: Mapped["Session"] = relationship(back_populates="participants")
     team: Mapped["Team | None"] = relationship(back_populates="participants")
     skills: Mapped[list["ParticipantSkill"]] = relationship(
@@ -51,4 +52,4 @@ class Participant(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Participant id={self.id} name={self.name!r}>"
+        return f"<Participant id={self.id} name={self.name!r} score={self.total_score}>"
