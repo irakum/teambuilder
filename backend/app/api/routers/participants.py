@@ -3,7 +3,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, UploadFile, File, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_db, get_organizer_token
+from app.api.dependencies import get_db, get_organizer_token, get_optional_user
+from app.models.user import User
 from app.schemas.schemas import (
     ParticipantIn, ParticipantUpdate, ParticipantOut,
     ImportResultOut, MessageOut,
@@ -14,6 +15,44 @@ router = APIRouter(
     prefix="/sessions/{session_id}/participants",
     tags=["participants"],
 )
+
+
+@router.get("/me", response_model=ParticipantOut)
+async def get_my_participant(
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+):
+    """Повертає учасника поточного юзера в сесії (по email), або 404."""
+    if not current_user:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Необхідна авторизація")
+
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    from app.models.participant import Participant
+    from app.models.participant_skill import ParticipantSkill
+
+    result = await db.execute(
+        select(Participant)
+        .where(
+            Participant.session_id == session_id,
+            Participant.email == current_user.email,
+        )
+        .options(
+            selectinload(Participant.skills).selectinload(ParticipantSkill.skill)
+        )
+    )
+    participant = result.scalar_one_or_none()
+    if not participant:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Ви не є учасником цієї сесії")
+
+    if participant.user_id is None:
+        participant.user_id = current_user.id
+        await db.flush()
+
+    return ParticipantOut.from_orm_with_skills(participant)
 
 
 @router.get("", response_model=list[ParticipantOut])
@@ -36,6 +75,7 @@ async def add_participant(
     participant = await service.add(
         session_id=session_id,
         name=body.name,
+        email=body.email,
         skills=[s.model_dump() for s in body.skills],
         compatibility_tags=body.compatibility_tags,
     )

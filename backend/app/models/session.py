@@ -46,6 +46,12 @@ class Session(Base):
     teams: Mapped[list["Team"]] = relationship(
         back_populates="session", cascade="all, delete-orphan"
     )
+    invites: Mapped[list["Invite"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+    organizers: Mapped[list["SessionOrganizer"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Session id={self.id} name={self.name!r} status={self.status}>"

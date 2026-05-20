@@ -43,6 +43,7 @@ class SkillOut(BaseModel):
 
 class ParticipantIn(BaseModel):
     name: str = Field(min_length=1, max_length=255, examples=["Іван Петренко"])
+    email: str | None = Field(default=None, max_length=255, examples=["ivan@example.com"])
     skills: list[SkillIn] = Field(default_factory=list)
     compatibility_tags: list[str] = Field(default_factory=list, examples=[["leader"]])
 
@@ -66,6 +67,7 @@ class ParticipantUpdate(BaseModel):
 class ParticipantOut(BaseModel):
     id: uuid.UUID
     name: str
+    email: str | None = None
     total_score: float
     compatibility_tags: list[str]
     skills: list[SkillOut] = Field(default_factory=list)
@@ -77,32 +79,16 @@ class ParticipantOut(BaseModel):
     def from_orm_with_skills(cls, participant) -> "ParticipantOut":
         import json as _json
         raw = participant.compatibility_tags
-        if isinstance(raw, list):
-            # Може бути список з одного JSON-рядка або список рядків
-            if len(raw) == 1 and isinstance(raw[0], str) and raw[0].startswith('['):
-                try:
-                    tags = _json.loads(raw[0])
-                except Exception:
-                    tags = raw
-            elif all(isinstance(t, str) and not t.startswith('[') for t in raw):
-                tags = raw
-            else:
-                try:
-                    tags = _json.loads(''.join(str(x) for x in raw))
-                except Exception:
-                    tags = []
-        elif isinstance(raw, str):
-            try:
-                tags = _json.loads(raw)
-                if not isinstance(tags, list):
-                    tags = []
-            except Exception:
+        try:
+            tags = _json.loads(raw) if raw else []
+            if not isinstance(tags, list):
                 tags = []
-        else:
+        except Exception:
             tags = []
         return cls(
             id=participant.id,
             name=participant.name,
+            email=participant.email,
             total_score=participant.total_score,
             compatibility_tags=tags,
             team_id=participant.team_id,

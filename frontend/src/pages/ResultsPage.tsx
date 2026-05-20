@@ -7,7 +7,8 @@ import Layout from '../components/ui/Layout'
 import Spinner from '../components/ui/Spinner'
 import SkillBadge from '../components/ui/SkillBadge'
 import { sessionsApi, distributionApi } from '../api/sessions'
-import { getErrorMessage } from '../api/client'
+import { apiClient, getErrorMessage } from '../api/client'
+import { useAuth } from '../contexts/AuthContext'
 import type { ParticipantOut, TeamOut } from '../types'
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -22,6 +23,7 @@ export default function ResultsPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
 
+  const { user } = useAuth()
   const [movingParticipant, setMovingParticipant] = useState<ParticipantOut | null>(null)
 
   const { data: session, isLoading, isFetching } = useQuery({
@@ -36,6 +38,13 @@ export default function ResultsPage() {
       }
       return false
     },
+  })
+
+  const { data: myParticipant } = useQuery({
+    queryKey: ['session-me', sessionId],
+    queryFn: () => apiClient.get(`/sessions/${sessionId}/participants/me`).then(r => r.data),
+    enabled: !!user && !!sessionId,
+    retry: false,
   })
 
   const redistributeMutation = useMutation({
@@ -168,12 +177,15 @@ export default function ResultsPage() {
 
         {/* Teams grid */}
         <div className="grid gap-4 md:grid-cols-2">
-          {session.teams.map((team: TeamOut) => (
+          {session.teams.map((team: TeamOut) => {
+            const isMyTeam = myParticipant && team.participants.some(p => p.id === myParticipant.id)
+            return (
             <div
               key={team.id}
               className={`card overflow-hidden transition-all ${
                 movingParticipant && movingParticipant.team_id !== team.id
                   ? 'ring-2 ring-primary-400 cursor-pointer hover:shadow-md'
+                  : isMyTeam ? 'ring-2 ring-primary-300 shadow-md'
                   : ''
               }`}
               onClick={() => {
@@ -182,23 +194,37 @@ export default function ResultsPage() {
                 }
               }}
             >
-              <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-                <span className="font-semibold text-gray-800">{team.name}</span>
+              <div className={`px-4 py-3 border-b border-gray-100 flex justify-between items-center ${isMyTeam ? 'bg-primary-50' : 'bg-gray-50'}`}>
+                <span className="font-semibold text-gray-800 flex items-center gap-2">
+                  {team.name}
+                  {isMyTeam && <span className="text-xs text-primary-600 font-normal">(моя команда)</span>}
+                </span>
                 <span className="text-xs text-gray-400">
                   {team.participants.length} учасників · score {team.total_score.toFixed(1)}
                 </span>
               </div>
               <ul className="divide-y divide-gray-50">
-                {team.participants.map(p => (
-                  <li key={p.id} className="px-4 py-2.5 flex items-start gap-2">
+                {team.participants.map(p => {
+                  const isMe = myParticipant && p.id === myParticipant.id
+                  return (
+                  <li key={p.id} className={`px-4 py-2.5 flex items-start gap-2 ${isMe ? 'bg-primary-50/50' : ''}`}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-medium text-gray-900">{p.name}</span>
+                        <span className={`text-sm font-medium ${isMe ? 'text-primary-700' : 'text-gray-900'}`}>
+                          {p.name}{isMe ? ' (ви)' : ''}
+                        </span>
                         <span className="text-xs text-gray-400">{p.total_score.toFixed(1)}</span>
                       </div>
                       {p.skills.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {p.skills.map(sk => <SkillBadge key={sk.name} skill={sk} />)}
+                        </div>
+                      )}
+                      {p.compatibility_tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {p.compatibility_tags.map(t => (
+                            <span key={t} className="badge bg-purple-50 text-purple-700">{t}</span>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -212,10 +238,12 @@ export default function ResultsPage() {
                       </button>
                     )}
                   </li>
-                ))}
+                  )
+                })}
               </ul>
             </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </Layout>

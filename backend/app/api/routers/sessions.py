@@ -12,20 +12,19 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 @router.post("", response_model=SessionOut, status_code=status.HTTP_201_CREATED)
-async def create_session(body: SessionIn, db: AsyncSession = Depends(get_db)):
-    """
-    Створює нову сесію розподілу.
-    Повертає сесію **разом з токеном організатора** — збережи його,
-    він більше не відображатиметься.
-    """
+async def create_session(
+    body: SessionIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+):
     service = SessionService(db)
     session = await service.create(
         name=body.name,
         team_count=body.team_count,
         min_team_size=body.min_team_size,
         max_team_size=body.max_team_size,
+        owner_id=current_user.id if current_user else None,
     )
-    # get_with_relations щоб повернути повний об'єкт
     session = await service.get(session.id)
     return SessionOut.from_orm_full(session, include_token=True)
 

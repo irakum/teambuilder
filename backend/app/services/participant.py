@@ -13,8 +13,9 @@ from app.repositories.session import SessionRepository
 
 # Очікувані заголовки CSV (регістронезалежно)
 CSV_FIELD_NAME = "name"
-CSV_FIELD_SKILLS = "skills"   # формат: "Python:4,Design:3"
-CSV_FIELD_TAGS = "tags"       # формат: "leader,backend"
+CSV_FIELD_EMAIL = "email"
+CSV_FIELD_SKILLS = "skills"
+CSV_FIELD_TAGS = "tags"
 
 
 class ParticipantService:
@@ -37,6 +38,7 @@ class ParticipantService:
         name: str,
         skills: list[dict],
         compatibility_tags: list[str],
+        email: str | None = None,
     ) -> Participant:
         await self._get_active_session(session_id)
         self._validate_skills(skills)
@@ -45,6 +47,7 @@ class ParticipantService:
             session_id=session_id,
             name=name.strip(),
             compatibility_tags=compatibility_tags,
+            email=email,
         )
         if skills:
             await self.repo.set_skills(participant, skills)
@@ -151,11 +154,12 @@ class ParticipantService:
 
             raw_skills = row.get(CSV_FIELD_SKILLS, "") or ""
             raw_tags = row.get(CSV_FIELD_TAGS, "") or ""
+            email = (row.get(CSV_FIELD_EMAIL, "") or "").strip() or None
 
             skills = self._parse_skills_string(raw_skills, row_num=i)
             tags = [t.strip() for t in raw_tags.split(",") if t.strip()]
 
-            participant = await self.add(session_id, name, skills, tags)
+            participant = await self.add(session_id, name, skills, tags, email=email)
             created.append(participant)
 
         return created

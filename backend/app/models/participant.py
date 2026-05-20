@@ -1,7 +1,6 @@
 import uuid
 
 from sqlalchemy import String, Float, ForeignKey
-from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.types import Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -21,7 +20,6 @@ class Participant(Base):
         nullable=False,
         index=True,
     )
-    # team_id заповнюється після виконання розподілу, до того — NULL
     team_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("teams.id", ondelete="SET NULL"),
@@ -34,14 +32,10 @@ class Participant(Base):
         index=True,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-
-    # Зважений сумарний рейтинг навичок — обчислюється перед розподілом
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     total_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-
-    # Теги сумісності — список рядків, наприклад ["leader", "backend"]
-    # Зберігаємо як масив PostgreSQL, щоб не створювати окрему таблицю для тегів
-    compatibility_tags: Mapped[list[str]] = mapped_column(
-        ARRAY(String), nullable=False, default=list
+    compatibility_tags: Mapped[str] = mapped_column(
+        String(1000), nullable=False, default='[]'
     )
 
     user: Mapped["User | None"] = relationship(foreign_keys="[Participant.user_id]")

@@ -42,10 +42,12 @@ class ParticipantRepository(BaseRepository[Participant]):
         session_id: UUID,
         name: str,
         compatibility_tags: list[str],
+        email: str | None = None,
     ) -> Participant:
         participant = Participant(
             session_id=session_id,
             name=name,
+            email=email,
             compatibility_tags=self._tags_to_db(compatibility_tags),
         )
         self.db.add(participant)

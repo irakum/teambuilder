@@ -7,6 +7,8 @@ import DashboardPage from './pages/DashboardPage'
 import SessionPage from './pages/SessionPage'
 import ResultsPage from './pages/ResultsPage'
 import JoinPage from './pages/JoinPage'
+import ChatPage from './pages/ChatPage'
+import AnnouncementsPage from './pages/AnnouncementsPage'
 
 function RootRedirect() {
   const { user, isLoading } = useAuth()
@@ -27,7 +29,9 @@ export default function App() {
       <Route path="/dashboard" element={<DashboardPage />} />
       <Route path="/session/:id" element={<SessionPage />} />
       <Route path="/session/:id/results" element={<ResultsPage />} />
-      <Route path="/join/:id" element={<JoinPage />} />
+      <Route path="/join/:code" element={<JoinPage />} />
+      <Route path="/session/:id/chat" element={<ChatPage />} />
+      <Route path="/session/:id/announcements" element={<AnnouncementsPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

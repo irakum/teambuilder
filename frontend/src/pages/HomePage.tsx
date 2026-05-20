@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Users, Plus } from 'lucide-react'
 import Layout from '../components/ui/Layout'
@@ -11,6 +11,7 @@ import { getErrorMessage } from '../api/client'
 export default function HomePage() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [teamCount, setTeamCount] = useState(3)
   const [minSize, setMinSize] = useState(1)
@@ -23,9 +24,24 @@ export default function HomePage() {
         localStorage.setItem('organizer_token', session.organizer_token)
         localStorage.setItem(`token_${session.id}`, session.organizer_token)
       }
+
+      // одразу додаємо в кеш без запиту до сервера
+      queryClient.setQueryData(['my-sessions'], (old: any[] | undefined) => {
+        const newEntry = {
+          id: session.id,
+          name: session.name,
+          status: session.status,
+          team_count: session.team_count,
+          participant_count: 0,
+          role: 'organizer',
+          organizer_token: session.organizer_token,
+        }
+        return old ? [newEntry, ...old] : [newEntry]
+      })
+
       toast.success('Сесію створено!')
-      navigate(`/session/${session.id}`)
-    },
+  navigate(`/session/${session.id}`)
+},
     onError: (err) => toast.error(getErrorMessage(err)),
   })
 

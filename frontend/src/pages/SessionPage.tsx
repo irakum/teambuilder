@@ -2,24 +2,31 @@ import { useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { UserPlus, Upload, Trash2, Play, ArrowRight, X } from 'lucide-react'
+import { UserPlus, Upload, Trash2, Play, ArrowRight, X, Link, Copy, Check, ShieldCheck, Crown } from 'lucide-react'
 import Layout from '../components/ui/Layout'
 import Spinner from '../components/ui/Spinner'
 import SkillBadge from '../components/ui/SkillBadge'
 import { sessionsApi, participantsApi, distributionApi } from '../api/sessions'
-import { getErrorMessage } from '../api/client'
+import { apiClient, getErrorMessage } from '../api/client'
+import { useAuth } from '../contexts/AuthContext'
 import type { SkillIn } from '../types'
+import { MessageSquare } from 'lucide-react'
+import { Megaphone } from 'lucide-react'
 
 export default function SessionPage() {
   const { id: sessionId } = useParams<{ id: string }>()!
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const { user } = useAuth()
 
-  // ── Форма учасника ──────────────────────────────────────────────────────────
   const [name, setName] = useState('')
   const [skills, setSkills] = useState<SkillIn[]>([{ name: '', level: 3 }])
   const [tags, setTags] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [orgEmail, setOrgEmail] = useState('')
+  const [showOrgForm, setShowOrgForm] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const { data: session, isLoading } = useQuery({
@@ -28,6 +35,14 @@ export default function SessionPage() {
     enabled: !!sessionId,
     refetchInterval: false,
   })
+
+  const { data: organizers, refetch: refetchOrganizers } = useQuery({
+    queryKey: ['organizers', sessionId],
+    queryFn: () => apiClient.get(`/sessions/${sessionId}/organizers`).then(r => r.data as any[]),
+    enabled: !!sessionId,
+  })
+
+  const isOwner = organizers?.find(o => o.user_id === user?.id)?.role === 'owner'
 
   const addSkillRow = () => setSkills(s => [...s, { name: '', level: 3 }])
   const removeSkillRow = (i: number) => setSkills(s => s.filter((_, idx) => idx !== i))
@@ -66,13 +81,51 @@ export default function SessionPage() {
   const distributeMutation = useMutation({
     mutationFn: () => distributionApi.distribute(sessionId!, { use_compatibility: true }),
     onSuccess: () => {
-      // Інвалідуємо кеш — ResultsPage зробить свіжий запит і покаже спінер поки чекає
       qc.removeQueries({ queryKey: ['session', sessionId] })
       toast.success('Розподіл виконано!')
       navigate(`/session/${sessionId}/results`)
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   })
+
+  const inviteMutation = useMutation({
+    mutationFn: () => apiClient.post(`/sessions/${sessionId}/invites`, {}).then(r => r.data),
+    onSuccess: (data: any) => {
+      const url = `${window.location.origin}/join/${data.code}`
+      setInviteUrl(url)
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  })
+
+  const addOrgMutation = useMutation({
+    mutationFn: (email: string) =>
+      apiClient.post(`/sessions/${sessionId}/organizers`, { email }).then(r => r.data),
+    onSuccess: () => {
+      toast.success('Організатора додано')
+      setOrgEmail('')
+      setShowOrgForm(false)
+      refetchOrganizers()
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  })
+
+  const removeOrgMutation = useMutation({
+    mutationFn: (userId: string) =>
+      apiClient.delete(`/sessions/${sessionId}/organizers/${userId}`),
+    onSuccess: () => {
+      toast.success('Організатора видалено')
+      refetchOrganizers()
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  })
+
+  const handleCopy = () => {
+    if (!inviteUrl) return
+    navigator.clipboard.writeText(inviteUrl)
+    setCopied(true)
+    toast.success('Посилання скопійовано!')
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   const handleAddParticipant = (e: React.FormEvent) => {
     e.preventDefault()
@@ -108,6 +161,22 @@ export default function SessionPage() {
             </p>
           </div>
           <div className="flex gap-2 flex-shrink-0">
+            <button className="btn-secondary" onClick={() => navigate(`/session/${sessionId}/announcements`)}>
+              <Megaphone className="h-4 w-4" />
+                Оголошення
+            </button>
+            <button
+              className="btn-secondary"
+              onClick={() => inviteMutation.mutate()}
+              disabled={inviteMutation.isPending}
+            >
+              <Link className="h-4 w-4" />
+              {inviteMutation.isPending ? 'Генерація...' : 'Запросити'}
+            </button>
+            <button className="btn-secondary" onClick={() => navigate(`/session/${sessionId}/chat`)}>
+              <MessageSquare className="h-4 w-4" />
+                Чат
+            </button>
             {session.status === 'distributed' && (
               <button
                 className="btn-secondary"
@@ -130,9 +199,20 @@ export default function SessionPage() {
           </div>
         </div>
 
+        {/* Invite URL */}
+        {inviteUrl && (
+          <div className="card p-4 flex items-center gap-3 bg-blue-50 border border-blue-100">
+            <span className="text-sm text-blue-800 flex-1 truncate">{inviteUrl}</span>
+            <button onClick={handleCopy} className="btn-secondary flex-shrink-0 text-blue-700">
+              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copied ? 'Скопійовано' : 'Копіювати'}
+            </button>
+          </div>
+        )}
+
         {/* Add participant controls */}
         {isPending && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button className="btn-secondary" onClick={() => setShowForm(f => !f)}>
               <UserPlus className="h-4 w-4" />
               Додати учасника
@@ -163,7 +243,6 @@ export default function SessionPage() {
                 <input className="input" placeholder="Іван Петренко"
                   value={name} onChange={e => setName(e.target.value)} />
               </div>
-
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label className="label mb-0">Навички</label>
@@ -189,13 +268,11 @@ export default function SessionPage() {
                   ))}
                 </div>
               </div>
-
               <div>
                 <label className="label">Теги сумісності <span className="text-gray-400 font-normal">(через кому)</span></label>
                 <input className="input" placeholder="leader, backend"
                   value={tags} onChange={e => setTags(e.target.value)} />
               </div>
-
               <div className="flex gap-2">
                 <button type="submit" className="btn-primary" disabled={addMutation.isPending}>
                   {addMutation.isPending ? 'Збереження...' : 'Додати'}
@@ -259,9 +336,85 @@ export default function SessionPage() {
         {/* CSV hint */}
         {isPending && (
           <p className="text-xs text-gray-400 text-center">
-            Формат CSV: <code>name,skills,tags</code> · Приклад рядка: <code>Іван,"Python:4,Design:3","leader"</code>
+            Формат CSV: <code>name,email,skills,tags</code> · Приклад: <code>Іван,ivan@gmail.com,"Python:4,Design:3","leader"</code>
           </p>
         )}
+
+        {/* Organizers section */}
+        <div className="card overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-600 flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4" />
+              Організатори ({organizers?.length ?? 0})
+            </span>
+            {isOwner && (
+              <button
+                className="text-sm text-primary-600 hover:underline"
+                onClick={() => setShowOrgForm(f => !f)}
+              >
+                + Додати
+              </button>
+            )}
+          </div>
+
+          {/* Add organizer form */}
+          {showOrgForm && isOwner && (
+            <div className="px-5 py-4 border-b border-gray-100 bg-white">
+              <div className="flex gap-2">
+                <input
+                  className="input flex-1"
+                  placeholder="email@example.com"
+                  value={orgEmail}
+                  onChange={e => setOrgEmail(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOrgMutation.mutate(orgEmail) } }}
+                />
+                <button
+                  className="btn-primary"
+                  disabled={!orgEmail.trim() || addOrgMutation.isPending}
+                  onClick={() => addOrgMutation.mutate(orgEmail.trim())}
+                >
+                  {addOrgMutation.isPending ? '...' : 'Додати'}
+                </button>
+                <button className="btn-secondary" onClick={() => { setShowOrgForm(false); setOrgEmail('') }}>
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          <ul className="divide-y divide-gray-100">
+            {(organizers ?? []).map((org: any) => (
+              <li key={org.user_id} className="px-5 py-3 flex items-center gap-3">
+                {org.avatar_url && (
+                  <img src={org.avatar_url} alt={org.name} className="w-8 h-8 rounded-full flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    {org.role === 'owner'
+                      ? <Crown className="h-3.5 w-3.5 text-amber-500" />
+                      : <ShieldCheck className="h-3.5 w-3.5 text-blue-500" />
+                    }
+                    <span className="font-medium text-gray-900 text-sm">{org.name}</span>
+                    <span className={`badge text-xs ${org.role === 'owner' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>
+                      {org.role === 'owner' ? 'Власник' : 'Організатор'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400">{org.email}</p>
+                </div>
+                {isOwner && org.role !== 'owner' && (
+                  <button
+                    onClick={() => removeOrgMutation.mutate(org.user_id)}
+                    className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
+                    disabled={removeOrgMutation.isPending}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+
       </div>
     </Layout>
   )
